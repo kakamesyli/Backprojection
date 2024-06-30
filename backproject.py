@@ -12,26 +12,25 @@ import numpy as np
 from cmath import pi
 from copy import deepcopy
 from _functools import reduce
+import Func_create
 
-import scipy.signal
+from scipy import integrate, special
 from matplotlib import pyplot as plt
-from numpy.random.mtrand import multivariate_normal
-from matplotlib import colors
-from matplotlib import cm
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.projections import projection_registry
+
+
 
 
 
 
 grid_dis = 1.2e3
 dector_area = 10
-component = 40
+component = 20
 satellite_rot_speed = 1*pi/180
 module_range = 180
 time_intev = ((module_range/component)*pi/180)/satellite_rot_speed
 init_phase_pim = 0
-FOV = 30/(2*pi)
+# FOV = 30/(2*pi)
+FOV = 40/60*pi/180
 pixel_range = 128
 
 class Base_oper(object):
@@ -169,6 +168,8 @@ def create_init_img(pixel_range):
     init_img = np.zeros((pixel_range,pixel_range))
     guass_image1 = np.zeros_like(init_img)
     guass_image2 = np.zeros_like(init_img)
+    pulse_image1 = np.zeros_like(init_img)
+    pulse_image2 = np.zeros_like(init_img)
     
     '''
     init_img[7,9] = 14872
@@ -177,27 +178,39 @@ def create_init_img(pixel_range):
     '''
     #init_img[int(np.floor(pixel_range/1.6)),int(np.floor(pixel_range/1.4))] = 1e3
     #init_img[int(np.floor(pixel_range/3.1)),int(np.floor(pixel_range/2.2))] = 1e3
-    
-    
-    
+
     #高斯点源
-    gauss_range_1 = 44
-    gauss_range_2 = 20
-    
-    #directreverse
-    '''
-    gauss_pos_1 = [45,23]
-    gauss_pos_2 = [11,41]
-    '''
-    
-    gauss_pos_1 = [32,37]
-    gauss_pos_2 = [37,42]
-    sigma = 2
-    gauss_1 = create_guass(gauss_range_1, sigma)
-    gauss_2 = create_guass(gauss_range_2, sigma)
-    guass_image1[gauss_pos_1[0]-int(gauss_range_1/2):gauss_pos_1[0]+int(gauss_range_1/2), gauss_pos_1[1]-int(gauss_range_1/2):gauss_pos_1[1]+int(gauss_range_1/2)] = gauss_1
-    guass_image2[gauss_pos_2[0]-int(gauss_range_2/2):gauss_pos_2[0]+int(gauss_range_2/2), gauss_pos_2[1]-int(gauss_range_2/2):gauss_pos_2[1]+int(gauss_range_2/2)] = gauss_2*0.2
-    init_img = init_img + guass_image1
+    # gauss_range_1 = 44
+    # gauss_range_2 = 20
+    #
+    # #directreverse
+    # '''
+    # gauss_pos_1 = [45,23]
+    # gauss_pos_2 = [11,41]
+    # '''
+    #
+    # gauss_pos_1 = [32,37]
+    # gauss_pos_2 = [37,42]
+    # sigma = 2
+    # gauss_1 = create_guass(gauss_range_1, sigma)
+    # gauss_2 = create_guass(gauss_range_2, sigma)
+    # guass_image1[gauss_pos_1[0]-int(gauss_range_1/2):gauss_pos_1[0]+int(gauss_range_1/2), gauss_pos_1[1]-int(gauss_range_1/2):gauss_pos_1[1]+int(gauss_range_1/2)] = gauss_1
+    # guass_image2[gauss_pos_2[0]-int(gauss_range_2/2):gauss_pos_2[0]+int(gauss_range_2/2), gauss_pos_2[1]-int(gauss_range_2/2):gauss_pos_2[1]+int(gauss_range_2/2)] = gauss_2*0.2
+    # init_img = init_img + guass_image1
+
+
+    # 脉冲点源
+    pulse_range_1 = 4
+    pulse_range_2 = 4
+    pulse_pos_1 = [32, 32]
+    pulse_pos_2 = [37, 42]
+    pulse_1 = create_pulse(pulse_range_1)
+    pulse_2 = create_pulse(pulse_range_2)
+    pulse_image1[pulse_pos_1[0] - int(pulse_range_1 / 2):pulse_pos_1[0] + int(pulse_range_1 / 2),
+        pulse_pos_1[1] - int(pulse_range_1 / 2):pulse_pos_1[1] + int(pulse_range_1 / 2)] = pulse_1
+    pulse_image2[pulse_pos_2[0] - int(pulse_range_2 / 2):pulse_pos_2[0] + int(pulse_range_2 / 2),
+        pulse_pos_2[1] - int(pulse_range_2 / 2):pulse_pos_2[1] + int(pulse_range_2 / 2)] = pulse_2 * 0.2
+    init_img = init_img + pulse_image1
 
     return init_img
 
@@ -206,7 +219,8 @@ def pixel_position(img_matrix,x,y):
     coor_ = FOV/length
     x_angle = (x-(length-1)/2)*coor_
     y_angle = (y-(length-1)/2)*coor_
-    theta = np.sqrt(x_angle**2+y_angle**2) / grid_dis
+    # theta = np.sqrt(x_angle**2+y_angle**2) / grid_dis
+    theta = np.sqrt(x_angle ** 2 + y_angle ** 2)
     if x_angle == 0:
         phai = pi/2
     else:
@@ -245,7 +259,13 @@ def create_guass(p, Sigma):
     z = multivariate_normal(mu,covariance,size)
     return z
     '''
-    
+
+def create_pulse(r):
+    x, y = np.mgrid[-r/2:r/2:r * 1j, -r/2:r/2:r * 1j]
+    z = np.sqrt(x**2+y**2)
+    z[z <= r/2] = 1
+    z[z > r / 2] = 0
+    return z
     
 def ci_value_total_pixel(ci):
     return ci.cal_ci_value()
@@ -350,18 +370,19 @@ def cal_variance(p):
 
 def pulse_res(theta,a):
     l = 1200
-    f = scipy.special.jv(0, 2*np.pi*l/a*np.tan(theta))
+    f = special.jv(0, 2*np.pi*l/a*np.tan(theta))
     return f
 
-def synPSF(pitch_array, fov):
+def synPSF(pitch_array, fov, ak):
+    pt = 1000
     y = np.array([])
     fig = plt.figure('eachPSF')
     ax = fig.add_axes([0.05, 0.05, 0.9, 0.9])
-    ax.set_xlabel(r'$\theta\,/\,arcsec$', fontsize=10)
+    ax.set_xlabel(r'$\theta\,/\,arcmin$', fontsize=10)
     ax.set_ylabel(r'$Amplitude$', fontsize=10)
-    ax.set_xticks(np.linspace(-fov, fov, 10), np.int16(np.round(np.linspace(-fov, fov, 10)*57.3*3600, decimals=0)))
+    ax.set_xticks(np.linspace(-fov, fov, 10), np.int16(np.round(np.linspace(-fov, fov, 10)*180/np.pi*60, decimals=0)))
     save_path = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\不同空间分辨率狭缝的脉冲响应.pdf'
-    theta = np.linspace(0, fov, 500)
+    theta = np.linspace(0, fov, np.int16(pt/2))
     for p in range(len(pitch_array)):
         fpo = pulse_res(theta, pitch_array[p])
         fna = np.flip(fpo)
@@ -370,14 +391,16 @@ def synPSF(pitch_array, fov):
             y = np.append(y, f[np.newaxis,:], axis=0)
         else:
             y = f[np.newaxis, :]
-        ax.plot(np.linspace(-fov, fov, 1000),y[p,:], label = r'$Grid\,{}={:.2f}\,arcsec$'.format(p+1, pitch_array[p] / grid_dis * 57.3 * 3600/2), linewidth=0.7)
+        # ax.plot(np.linspace(-fov, fov, pt),y[p,:], label = r'$Grid\,{}={:.2f}\,arcsec$'.format(p+1, pitch_array[p] / grid_dis * 57.3 * 3600/2), linewidth=0.7)
     # a = np.array([[8, 16, 24, 36, 15, -10, 5, -4, 3, -2]])
     # y1 = np.dot(a,y)
-    syn_y = reduce(lambda a, b: a + b, y)
-    # syn_y1 = reduce(lambda a, b: a + b, y1)
+    Ak = np.repeat(ak[:,np.newaxis], pt, axis=1)
+    y1 = Ak * y
+    # syn_y = reduce(lambda a, b: a + b, y)
+    syn_y1 = reduce(lambda a, b: a + b, y1)
     # syn_y1 = reduce(lambda a, b: a + b, y[:5])
     # syn_y2 = reduce(lambda a, b: a + b, y[4:-1])
-    ax.plot(np.linspace(-fov, fov, 1000), syn_y[:]/len(pitch_array), label=r'$synthesis\,PSF\,(1-10)$', ls = '-', linewidth=1.5, color='k')
+    ax.plot(np.linspace(-fov, fov, pt), syn_y1[:]/np.sum(ak), label=r'$synthesis\,PSF\,(1-10)$', ls = '-', linewidth=1.5, color='k')
     # ax.plot(np.linspace(-fov, fov, 1000), syn_y1[:], label=r'$synthesis\,PSF\,(1-5)$', ls = ':', linewidth=1.2)
     # ax.plot(np.linspace(-fov, fov, 1000), syn_y2[:], label=r'$synthesis\,PSF\,(5-9)$', ls = ':', linewidth=1.2)
     plt.legend(loc='upper right', ncol=1, bbox_to_anchor=(1,1), fontsize = 8, labelspacing=0.8,
@@ -385,6 +408,30 @@ def synPSF(pitch_array, fov):
     # plt.savefig(save_path, dpi=1000, format='pdf', bbox_inches='tight')
 
     plt.show()
+
+class aperture_synthesis():
+
+    def cal_Ak(self):
+        Ak = np.array([])
+        for p in pitch_array:
+            akv = 1/p * 2*pi * integrate.quad(lambda theta: self.create_Bk(theta, p, func=1), 0, FOV / 2)[0]
+            Ak = np.append(Ak, akv)
+        return Ak
+
+    def create_Bk(self, x, *args, **kwargs):
+        if args:
+            p = args[0]
+        fc = Func_create.Func_create()
+        if kwargs['func'] == 1:
+            width = FOV /10
+            Bk = grid_dis * np.tan(x) * fc.rect_pulse(x, width) * special.jv(0, 2 * pi * grid_dis / p * np.tan(x)) * grid_dis / (np.cos(x) ** 2)
+        elif kwargs['func'] == 2:
+            width = FOV /10
+            Bk = grid_dis * np.tan(x) * fc.Sa(x, width) * special.jv(0, 2 * pi * grid_dis / p * np.tan(x)) * grid_dis / (np.cos(x) ** 2)
+        elif kwargs['func'] == 3:
+            width = FOV / 20
+            Bk = x * fc.rect_pulse(x, width) * special.jv(0, 2 * pi /p * x)
+        return Bk
 
 
 if __name__ == "__main__":
@@ -402,10 +449,11 @@ if __name__ == "__main__":
     
     
     # pitch_array = [36e-3,52e-3,76e-3,108e-3,156e-3,224e-3,344e-3,524e-3,800e-3,1224e-3]
-    # pitch_array = [36e-3,48e-3,56e-3,76e-3,122e-3,176e-3,224e-3,344e-3,500e-3,668e-3]
+    # pitch_array = [56e-3,88e-3,108e-3,144e-3,156e-3,180e-3,200e-3,244e-3,286e-3,344e-3]
     # pitch_array = [36e-3, 40e-3, 48e-3, 56e-3, 68e-3, 80e-3, 124e-3, 244e-3, 344e-3, 500e-3]
-    pitch_array = [36e-3, 40e-3, 48e-3, 56e-3]
-    # pitch_array = [1224e-3]
+    # pitch_array = [56e-3, 88e-3, 156e-3, 344e-3, 800e-3, 1140e-3, 1600e-3, 2400e-3]
+    # pitch_array = [36e-3, 2400e-3]
+    pitch_array = np.linspace(30e-3, 3000e-3, 500)
     grid_angle = 0
     ci = []
     cim = []
@@ -422,55 +470,56 @@ if __name__ == "__main__":
     x_pixel2 = 4
     y_pixel2 = 4
     time_test = 0
-    fig_module_curve = plt.figure('module curve')
-    fig_trans_3d = plt.figure('trans 3d')
-    fa1 = np.zeros((len(pitch_array),pixel_range,pixel_range))
+    # fig_module_curve = plt.figure('module curve')
+    # fig_trans_3d = plt.figure('trans 3d')
+    fa1 = np.zeros((len(pitch_array), pixel_range, pixel_range))
+    fa2 = np.zeros((len(pitch_array), component, pixel_range, pixel_range))
     for p in range(len(pitch_array)):
-        ci.append([])
-        cim.append([])
-        #pim.append([])
-        p_value.append([])#注意需要先扩展一个空间，结构为 p_value[pitch][time][x][y]
-        p_flat.append([])
-
-        
-        for time_num in range(component):
-            c = Ci(time_num, init_img, pitch_array[p], grid_angle)
-            [cim_out,ci_out] = ci_value_total_pixel(c)
-            
-            #[cim_out,ci_out] = ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)
-            
-            ci[p].append(ci_out)#所有像元在时间仓下的和
-            cim[p].append(cim_out)#所有时间仓下的像元光子计数分布
-            #pim[p].append(pi_value_total_pixel(c))#所有时间仓下的像元pim*t
-            p_value[p].append(cal_pi_value(c))
-
-            #ci[p].append(ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)[1])
-            #cim[p].append(ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)[0])
-            
-        #计算平场变化pim
-        p_flat[p] = cal_flatfield_pim(p_value[p])
-        
-        # p_mean = cal_mean(p_value[p])
-        # fig = plt.figure()
-        # ax_mean = fig.add_axes([0.05,0.05,0.9,0.9])
-        # ax_mean.imshow(p_mean, cmap = 'gray')
-
-
-        
-        '''
-        #显示pim图像，数字代表时间仓
-        pim_flat_vol = np.array(deepcopy(p_flat[p][time_test], memo=None, _nil=[]))
-        pim_flat_vol = pim_flat_vol.reshape(pixel_range,pixel_range)
-        pim_vol = np.array(deepcopy(p_value[p][time_test], memo=None, _nil=[]))
-        pim_vol = pim_vol.reshape(pixel_range,pixel_range)
-        '''
-        
-        #显示单个时间仓下反投影图像
-        f_flat = backprojection_base(p_flat[p][time_test], ci[p][time_test])
-        f_nonflat = backprojection_base(p_value[p][time_test], ci[p][time_test])
-        #显示图像像元强度与自身pim相乘的图像
-        c_flat = np.multiply(init_img,p_flat[p])
-        c_nonflat = np.multiply(init_img,p_value[p])
+        # ci.append([])
+        # cim.append([])
+        # #pim.append([])
+        # p_value.append([])#注意需要先扩展一个空间，结构为 p_value[pitch][time][x][y]
+        # p_flat.append([])
+        #
+        #
+        # for time_num in range(component):
+        #     c = Ci(time_num, init_img, pitch_array[p], grid_angle)
+        #     [cim_out,ci_out] = ci_value_total_pixel(c)
+        #
+        #     #[cim_out,ci_out] = ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)
+        #
+        #     ci[p].append(ci_out)#所有像元在时间仓下的和
+        #     cim[p].append(cim_out)#所有时间仓下的像元光子计数分布
+        #     #pim[p].append(pi_value_total_pixel(c))#所有时间仓下的像元pim*t
+        #     p_value[p].append(cal_pi_value(c))
+        #
+        #     #ci[p].append(ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)[1])
+        #     #cim[p].append(ci_value_total_pixel(time_num, init_img, pitch_array[p], grid_angle)[0])
+        #
+        # #计算平场变化pim
+        # p_flat[p] = cal_flatfield_pim(p_value[p])
+        #
+        # # p_mean = cal_mean(p_value[p])
+        # # fig = plt.figure()
+        # # ax_mean = fig.add_axes([0.05,0.05,0.9,0.9])
+        # # ax_mean.imshow(p_mean, cmap = 'gray')
+        #
+        #
+        #
+        # '''
+        # #显示pim图像，数字代表时间仓
+        # pim_flat_vol = np.array(deepcopy(p_flat[p][time_test], memo=None, _nil=[]))
+        # pim_flat_vol = pim_flat_vol.reshape(pixel_range,pixel_range)
+        # pim_vol = np.array(deepcopy(p_value[p][time_test], memo=None, _nil=[]))
+        # pim_vol = pim_vol.reshape(pixel_range,pixel_range)
+        # '''
+        #
+        # #显示单个时间仓下反投影图像
+        # f_flat = backprojection_base(p_flat[p][time_test], ci[p][time_test])
+        # f_nonflat = backprojection_base(p_value[p][time_test], ci[p][time_test])
+        # #显示图像像元强度与自身pim相乘的图像
+        # c_flat = np.multiply(init_img,p_flat[p])
+        # c_nonflat = np.multiply(init_img,p_value[p])
         
 
         # #将p_flat图像按一定时间仓绘图
@@ -623,97 +672,122 @@ if __name__ == "__main__":
         #f += backprojection(p_value[p], ci[p])
         #f[31][31]=0
 
-        # 单节距双狭缝反投影叠加过程绘图
-        save_path = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\单节距反投影累加过程图.jpg'
-        fig = plt.figure('back')
-        fa = np.zeros_like(p_flat)
-
-        for i in range(component):
-            fa[p, i] = ci[p][i] * p_flat[p][i] / time_intev
-            axc = fig.add_subplot(20, 10, i * 5 + 1)
-            axc.set_xlabel('')
-            axc.set_ylabel('')
-            axc.set_xticks([])
-            axc.set_yticks([])
-            plt.setp(axc.spines.values(), linewidth=0.5)
-            axc.imshow(p_value[p][i], cmap='gray')
-            axc.imshow(init_img, cmap='rainbow', alpha=init_img_alpha)
-
-            axc1 = fig.add_subplot(20, 10, i * 5 + 2)
-            axc1.set_xlabel('')
-            axc1.set_ylabel('')
-            axc1.set_xticks([])
-            axc1.set_yticks([])
-            plt.setp(axc1.spines.values(), linewidth=0.5)
-            axc1.imshow(ci[p][i]/np.max(ci[p][:]) * np.ones((pixel_range,pixel_range)), vmin = 0, vmax = 1, cmap='gray')
-            axc2 = fig.add_subplot(20, 10, i * 5 + 3)
-            axc2.set_xlabel('')
-            axc2.set_ylabel('')
-            axc2.set_xticks([])
-            axc2.set_yticks([])
-            plt.setp(axc2.spines.values(), linewidth=0.5)
-            axc2.imshow(fa[p, i, :, :], vmin = 0, vmax = np.max(fa[p, :, :, :]), cmap='gray')
-            axc3 = fig.add_subplot(20, 10, i * 5 + 4)
-            axc3.set_xlabel('')
-            axc3.set_ylabel('')
-            axc3.set_xticks([])
-            axc3.set_yticks([])
-            plt.setp(axc3.spines.values(), linewidth=0.5)
-            fa1[p] = fa1[p] + fa[p, i, :, :]
-            axc3.imshow(fa1[p, :, :], cmap='gray')
-
-        fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02, wspace=-0.9, hspace=0)
-        # plt.savefig(save_path, dpi=1000, format='jpg', bbox_inches='tight')
-
-        # 不同节距狭缝成像效果
-        save_path_single_grid = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\不同空间分辨率狭缝的反投影成像图.pdf'
-        fig_single = plt.figure('single slit projection')
-        fa = np.zeros_like(p_flat)
-        for i in range(component):
-            fa[p, i] = ci[p][i] * p_flat[p][i] / time_intev
-            fa1[p] = fa1[p] + fa[p, i, :, :]
-        ax_sing = fig_single.add_subplot(2,np.int8(len(pitch_array)/2),p+1)
-        plt.setp(ax_sing.spines.values(), linewidth=0.5)
-        ax_sing.set_title(r'${:.2f}\, arcsec$'.format(pitch_array[p] / grid_dis * 57.3 * 3600/2), fontsize=8)
-        ax_sing.set_xticks([])
-        ax_sing.set_yticks([])
-        ax_sing.imshow(fa1[p, :, :], cmap='gray')
-        fig_single.subplots_adjust(left=0.02, bottom=0.02, right=0.98, top=0.98, hspace=-0.5)
-        # plt.savefig(save_path_single_grid, dpi=1000, format='pdf', bbox_inches='tight')
-
-    # 多节距狭缝叠加成像效果
-    fa_accu = reduce(lambda x,y:x+y, fa1)
-    save_path_accu = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\反投影成像叠加图.pdf'
-    fig_accu = plt.figure('accumulated slit projection')
-    ax_accu = fig_accu.add_subplot(1, 2, 2)
-    ax_accu.set_xlabel('(b)', fontsize=10, fontproperties='times new roman', fontweight='bold')
-    ax_accu.xaxis.set_tick_params(labelsize=8)
-    ax_accu.yaxis.set_tick_params(labelsize=8)
-    ax_accu.imshow(fa_accu, cmap='rainbow')
-    ax_initimg = fig_accu.add_subplot(1, 2, 1)
-    ax_initimg.set_xlabel('(a)', fontsize=10, fontproperties='times new roman', fontweight='bold')
-    ax_initimg.xaxis.set_tick_params(labelsize=8)
-    ax_initimg.yaxis.set_tick_params(labelsize=8)
-    ax_initimg.imshow(init_img, cmap='rainbow')
-    # plt.savefig(save_path_accu, dpi=1000, format='pdf', bbox_inches='tight')
+    #     # 单节距双狭缝反投影叠加过程绘图
+    #     # save_path = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\单节距反投影累加过程图.jpg'
+    #     save_path = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\testfig\单节距反投影累加过程图1.jpg'
+    #     fig = plt.figure('back')
+    #     fa = np.zeros_like(p_flat)
+    #
+    #     for i in range(component):
+    #         fa[p, i] = ci[p][i] * p_flat[p][i] / time_intev
+    #         fa1[p] = fa1[p] + fa[p, i, :, :]
+    #         fa2[p, i] = copy.deepcopy(fa1[p])
+    #     for i in range(component):
+    #         axc = fig.add_subplot(10, 10, i * 5 + 1)
+    #         axc.set_xlabel('')
+    #         axc.set_ylabel('')
+    #         axc.set_xticks([])
+    #         axc.set_yticks([])
+    #         plt.setp(axc.spines.values(), linewidth=0.5)
+    #         axc.imshow(p_value[p][i], cmap='gray')
+    #         axc.imshow(init_img, cmap='rainbow', alpha=init_img_alpha)
+    #
+    #         axc1 = fig.add_subplot(10, 10, i * 5 + 2)
+    #         axc1.set_xlabel('')
+    #         axc1.set_ylabel('')
+    #         axc1.set_xticks([])
+    #         axc1.set_yticks([])
+    #         plt.setp(axc1.spines.values(), linewidth=0.5)
+    #         axc1.imshow(ci[p][i]/np.max(np.abs(ci[p][:])) * np.ones((pixel_range,pixel_range)), vmin = 0, vmax = 1, cmap='gray')
+    #
+    #         axc2 = fig.add_subplot(10, 10, i * 5 + 3)
+    #         axc2.set_xlabel('')
+    #         axc2.set_ylabel('')
+    #         axc2.set_xticks([])
+    #         axc2.set_yticks([])
+    #         plt.setp(axc2.spines.values(), linewidth=0.5)
+    #         axc2.imshow(fa[p, i, :, :]/np.max(np.abs(fa[p, :, :, :])), vmin = -1, vmax = 1, cmap='gray')
+    #
+    #         axc3 = fig.add_subplot(10, 10, i * 5 + 4)
+    #         axc3.set_xlabel('')
+    #         axc3.set_ylabel('')
+    #         axc3.set_xticks([])
+    #         axc3.set_yticks([])
+    #         plt.setp(axc3.spines.values(), linewidth=0.5)
+    #         # fa1[p] = fa1[p] + fa[p, i, :, :]
+    #         axc3.imshow(fa2[p, i, :, :]/np.max(np.abs(fa2[p, :, :])), vmin = -1, vmax = 1, cmap='gray')
+    #
+    #     # fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02, wspace=-0.9, hspace=0)
+    #     fig.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02, wspace=0, hspace=0)
+    #     # plt.savefig(save_path, dpi=200, format='jpg', bbox_inches='tight')
+    #
+    #     # 不同节距狭缝成像效果
+    #     # save_path_single_grid = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\不同空间分辨率狭缝的反投影成像图.pdf'
+    #     save_path_single_grid = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\testfig\不同空间分辨率狭缝的反投影成像图1.jpg'
+    #     fig_single = plt.figure('single slit projection')
+    #     fa = np.zeros_like(p_flat)
+    #     # for i in range(component):
+    #     #     fa[p, i] = ci[p][i] * p_flat[p][i] / time_intev
+    #     #     fa1[p] = fa1[p] + fa[p, i, :, :]
+    #     ax_sing = fig_single.add_subplot(2,np.int8(len(pitch_array)/2),p+1)
+    #     plt.setp(ax_sing.spines.values(), linewidth=0.5)
+    #     # ax_sing.set_title(r'${:.2f}\, arcsec$'.format(pitch_array[p] / grid_dis * 57.3 * 3600/2), fontsize=8)
+    #     ax_sing.set_title('${:.2f}$ \n ${:.2f}$'.format(pitch_array[p] / grid_dis * 57.3 * 3600 / 2, 2.405*pitch_array[p]*180*60/pi/pi/grid_dis), fontsize=8)
+    #     ax_sing.set_xticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    #     ax_sing.set_yticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    #     ax_sing.imshow(fa1[p, :, :], cmap='gray')
+    #     fig_single.subplots_adjust(left=0.02, bottom=0.02, right=0.98, top=0.98, hspace=0)
+    #     # plt.savefig(save_path_single_grid, dpi=200, format='jpg', bbox_inches='tight')
+    #
+    #
+    #
+    # # 多节距狭缝叠加成像效果
+    # fa_accu = reduce(lambda x,y:x+y, fa1)
+    # # save_path_accu = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\反投影成像叠加图.pdf'
+    # save_path_accu = r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\testfig\反投影成像叠加图1.jpg'
+    # fig_accu = plt.figure('accumulated slit projection')
+    # ax_accu = fig_accu.add_subplot(1, 2, 2)
+    # # ax_accu.set_xlabel('(b)', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # # ax_accu.set_title('BP Image', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # ax_accu.set_xlabel(r'$FOV\, /\, arcmin$', fontsize=8)
+    # ax_accu.set_ylabel(r'$FOV\, /\, arcmin$', fontsize=8)
+    # ax_accu.set_xticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_accu.set_yticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_accu.xaxis.set_tick_params(labelsize=8)
+    # ax_accu.yaxis.set_tick_params(labelsize=8)
+    # ax_accu.text(58,170,'(b)', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # ax_accu.imshow(fa_accu, cmap='gray')
+    # ax_initimg = fig_accu.add_subplot(1, 2, 1)
+    # # ax_initimg.set_xlabel('(a)', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # # ax_initimg.set_title('Initial Image', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # ax_initimg.set_xlabel(r'$FOV\, /\, arcmin$', fontsize=8)
+    # ax_initimg.set_ylabel(r'$FOV\, /\, arcmin$', fontsize=8)
+    # ax_initimg.set_xticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_initimg.set_yticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_initimg.xaxis.set_tick_params(labelsize=8)
+    # ax_initimg.yaxis.set_tick_params(labelsize=8)
+    # ax_initimg.text(58, 170, '(a)', fontsize=10, fontproperties='times new roman', fontweight='bold')
+    # ax_initimg.imshow(init_img, cmap='rainbow')
+    # fig_accu.subplots_adjust(wspace=0.5)
+    # # plt.savefig(save_path_accu, dpi=200, format='jpg', bbox_inches='tight')
 
     # save_path1 = (r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\初始图像.jpg')
     # fig = plt.figure()
     # ax_init = fig.add_axes([0.05, 0.05, 0.9, 0.9])
-    # ax_init.set_xlabel('')
-    # ax_init.set_ylabel('')
-    # ax_init.set_xticks([])
-    # ax_init.set_yticks([])
+    # ax_init.set_xlabel(r'$FOV /\, arcmin$')
+    # ax_init.set_ylabel(r'$FOV /\, arcmin$')
+    # ax_init.set_xticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_init.set_yticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
     # ax_init.imshow(init_img, cmap='rainbow')
     # plt.savefig(save_path1, dpi=200, format='jpg', bbox_inches='tight')
     #
     # save_path2 = (r'E:\g\DOCTOR\预答辩\各学科群分会学位论文撰写具体要求（2023年8月更新）\模板\Img\Chap_2\单狭缝叠加.jpg')
     # fig = plt.figure()
     # ax_sigleslit = fig.add_axes([0.05,0.05,0.9,0.9])
-    # ax_sigleslit.set_xlabel('')
-    # ax_sigleslit.set_ylabel('')
-    # ax_sigleslit.set_xticks([])
-    # ax_sigleslit.set_yticks([])
+    # ax_sigleslit.set_xlabel(r'$FOV /\, arcmin$')
+    # ax_sigleslit.set_ylabel(r'$FOV /\, arcmin$')
+    # ax_sigleslit.set_xticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
+    # ax_sigleslit.set_yticks(np.linspace(0, 127, 5), np.int16(np.round(np.linspace(-FOV/2, FOV/2, 5)*180/pi*60,decimals=0)))
     # ax_sigleslit.imshow(fa1[p, :, :], cmap='gray')
     # plt.savefig(save_path2, dpi=200, format='jpg', bbox_inches='tight')
     #
@@ -744,7 +818,14 @@ if __name__ == "__main__":
     # X,Y = np.mgrid[0:pixel_range:1,0:pixel_range:1]
     # ax6.plot_surface(X, Y, f, cmap='rainbow', linewidth=0, antialiased=False)
 
-    synPSF(pitch_array, np.pi/3600)
+
+    ap = aperture_synthesis()
+    ak = ap.cal_Ak()
+    fig = plt.figure('Ak')
+    ax_ak = fig.add_axes([0.05,0.05,0.9,0.9])
+    ax_ak.stem(range(len(ak)), ak)
+
+    synPSF(pitch_array, FOV/2, ak)
 
     plt.show()
     
